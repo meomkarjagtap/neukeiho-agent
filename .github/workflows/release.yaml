@@ -22,11 +22,19 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Tidy and download dependencies
+        run: |
+          go mod tidy
+          go mod download
+
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
 
-      - name: Build linux/amd64
+      - name: Create dist directory
+        run: mkdir -p dist
+
+      - name: Build linux/amd64 (x86_64)
         env:
           GOOS: linux
           GOARCH: amd64
@@ -34,7 +42,7 @@ jobs:
         run: |
           go build \
             -ldflags "-X main.version=${{ steps.version.outputs.VERSION }} -s -w" \
-            -o dist/neukeiho-agent-linux-amd64 \
+            -o dist/neukeiho-agent-${{ steps.version.outputs.VERSION }}-x86_64 \
             ./cmd/neukeiho-agent
 
       - name: Build linux/arm64
@@ -45,13 +53,29 @@ jobs:
         run: |
           go build \
             -ldflags "-X main.version=${{ steps.version.outputs.VERSION }} -s -w" \
-            -o dist/neukeiho-agent-linux-arm64 \
+            -o dist/neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm64 \
+            ./cmd/neukeiho-agent
+
+      - name: Build linux/arm (armv7)
+        env:
+          GOOS: linux
+          GOARCH: arm
+          GOARM: 7
+          CGO_ENABLED: 0
+        run: |
+          go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.VERSION }} -s -w" \
+            -o dist/neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm \
             ./cmd/neukeiho-agent
 
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum neukeiho-agent-linux-amd64 neukeiho-agent-linux-arm64 > checksums.txt
+          sha256sum \
+            neukeiho-agent-${{ steps.version.outputs.VERSION }}-x86_64 \
+            neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm64 \
+            neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm \
+            > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -63,23 +87,30 @@ jobs:
 
             Lightweight node agent — deploy to every VM you want to monitor.
 
-            ### Quick install (Linux amd64)
+            ### Install (Linux x86_64)
             ```bash
-            curl -LO https://github.com/meomkarjagtap/neukeiho-agent/releases/download/${{ steps.version.outputs.VERSION }}/neukeiho-agent-linux-amd64
-            chmod +x neukeiho-agent-linux-amd64
-            sudo mv neukeiho-agent-linux-amd64 /usr/bin/neukeiho-agent
+            curl -LO https://github.com/meomkarjagtap/neukeiho-agent/releases/download/${{ steps.version.outputs.VERSION }}/neukeiho-agent-${{ steps.version.outputs.VERSION }}-x86_64
+            chmod +x neukeiho-agent-${{ steps.version.outputs.VERSION }}-x86_64
+            sudo mv neukeiho-agent-${{ steps.version.outputs.VERSION }}-x86_64 /usr/bin/neukeiho-agent
             ```
 
-            ### Quick install (Linux arm64)
+            ### Install (Linux arm64)
             ```bash
-            curl -LO https://github.com/meomkarjagtap/neukeiho-agent/releases/download/${{ steps.version.outputs.VERSION }}/neukeiho-agent-linux-arm64
-            chmod +x neukeiho-agent-linux-arm64
-            sudo mv neukeiho-agent-linux-arm64 /usr/bin/neukeiho-agent
+            curl -LO https://github.com/meomkarjagtap/neukeiho-agent/releases/download/${{ steps.version.outputs.VERSION }}/neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm64
+            chmod +x neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm64
+            sudo mv neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm64 /usr/bin/neukeiho-agent
+            ```
+
+            ### Install (Linux arm / armv7)
+            ```bash
+            curl -LO https://github.com/meomkarjagtap/neukeiho-agent/releases/download/${{ steps.version.outputs.VERSION }}/neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm
+            chmod +x neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm
+            sudo mv neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm /usr/bin/neukeiho-agent
             ```
 
             ### Configure
             ```bash
-            sudo mkdir -p /etc/neukeiho-agent
+            sudo mkdir -p /etc/neukeiho-agent /var/log/neukeiho-agent
             sudo tee /etc/neukeiho-agent/agent.conf <<EOF
             [agent]
             node_id         = your-node-name
@@ -116,8 +147,9 @@ jobs:
             sha256sum -c checksums.txt
             ```
           files: |
-            dist/neukeiho-agent-linux-amd64
-            dist/neukeiho-agent-linux-arm64
+            dist/neukeiho-agent-${{ steps.version.outputs.VERSION }}-x86_64
+            dist/neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm64
+            dist/neukeiho-agent-${{ steps.version.outputs.VERSION }}-arm
             dist/checksums.txt
           draft: false
           prerelease: false
