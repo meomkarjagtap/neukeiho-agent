@@ -1,0 +1,5 @@
+neukeiho-agent
+*.conf
+!config/*.example
+*.log
+/vendor/
