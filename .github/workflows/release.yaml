@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Build linux/amd64
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 0
+        run: |
+          go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.VERSION }} -s -w" \
+            -o dist/neukeiho-agent-linux-amd64 \
+            ./cmd/neukeiho-agent
+
+      - name: Build linux/arm64
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 0
+        run: |
+          go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.VERSION }} -s -w" \
+            -o dist/neukeiho-agent-linux-arm64 \
+            ./cmd/neukeiho-agent
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum neukeiho-agent-linux-amd64 neukeiho-agent-linux-arm64 > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NeuKeiho Agent ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## NeuKeiho Agent ${{ steps.version.outputs.VERSION }}
+
+            Lightweight node agent — deploy to every VM you want to monitor.
+
+            ### Quick install (Linux amd64)
+            ```bash
+            curl -LO https://github.com/meomkarjagtap/neukeiho-agent/releases/download/${{ steps.version.outputs.VERSION }}/neukeiho-agent-linux-amd64
+            chmod +x neukeiho-agent-linux-amd64
+            sudo mv neukeiho-agent-linux-amd64 /usr/bin/neukeiho-agent
+            ```
+
+            ### Quick install (Linux arm64)
+            ```bash
+            curl -LO https://github.com/meomkarjagtap/neukeiho-agent/releases/download/${{ steps.version.outputs.VERSION }}/neukeiho-agent-linux-arm64
+            chmod +x neukeiho-agent-linux-arm64
+            sudo mv neukeiho-agent-linux-arm64 /usr/bin/neukeiho-agent
+            ```
+
+            ### Configure
+            ```bash
+            sudo mkdir -p /etc/neukeiho-agent
+            sudo tee /etc/neukeiho-agent/agent.conf <<EOF
+            [agent]
+            node_id         = your-node-name
+            controller_host = YOUR_CONTROLLER_IP
+            controller_port = 9100
+            push_interval   = 10
+            log_path        = /var/log/neukeiho-agent/agent.log
+            EOF
+            ```
+
+            ### Run as systemd service
+            ```bash
+            sudo tee /etc/systemd/system/neukeiho-agent.service <<EOF
+            [Unit]
+            Description=NeuKeiho Agent
+            After=network.target
+
+            [Service]
+            Type=simple
+            ExecStart=/usr/bin/neukeiho-agent --config /etc/neukeiho-agent/agent.conf
+            Restart=on-failure
+            RestartSec=5s
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now neukeiho-agent
+            ```
+
+            ### Verify checksum
+            ```bash
+            sha256sum -c checksums.txt
+            ```
+          files: |
+            dist/neukeiho-agent-linux-amd64
+            dist/neukeiho-agent-linux-arm64
+            dist/checksums.txt
+          draft: false
+          prerelease: false
