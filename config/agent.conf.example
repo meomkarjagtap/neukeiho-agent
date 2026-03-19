@@ -1,0 +1,6 @@
+[agent]
+node_id           = web-01
+controller_host   = 192.168.1.100
+controller_port   = 9100
+push_interval     = 10
+log_path          = /var/log/neukeiho-agent/agent.log
